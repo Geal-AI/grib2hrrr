@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/Geal-AI/grib2hrrr/discussions
+    about: Ask questions, share use cases, or discuss ideas before filing an issue.
+  - name: Security vulnerability
+    url: mailto:security@geal.ai
+    about: Please report security issues privately — do not open a public issue.
