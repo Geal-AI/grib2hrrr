@@ -157,7 +157,7 @@ func runSingle(ctx context.Context, client *grib2hrrr.HRRRClient, runTime time.T
 
 	val := field.Lookup(lat, lon)
 	if math.IsNaN(val) {
-		fatalf("(%.4f, %.4f) is outside the HRRR CONUS domain", lat, lon)
+		fatalf("no value at (%.4f, %.4f): point is outside the HRRR CONUS domain or the field has no data here (e.g. clear-sky for HGT:cloud ceiling)", lat, lon)
 	}
 
 	if asJSON {
@@ -223,7 +223,7 @@ func runAll(ctx context.Context, client *grib2hrrr.HRRRClient, runTime time.Time
 			case r.err != nil:
 				fields[i] = jsonField{Variable: r.key, Error: r.err.Error()}
 			case math.IsNaN(r.val):
-				fields[i] = jsonField{Variable: r.key, Error: "outside HRRR CONUS domain"}
+				fields[i] = jsonField{Variable: r.key, Error: "no data at this location"}
 			default:
 				fields[i] = jsonField{Variable: r.key, Values: valueMap(r.key, r.val)}
 			}
@@ -259,7 +259,7 @@ func runAll(ctx context.Context, client *grib2hrrr.HRRRClient, runTime time.Time
 		case r.err != nil:
 			fmt.Printf("  %-*s  error: %v\n", maxKey, r.key, r.err)
 		case math.IsNaN(r.val):
-			fmt.Printf("  %-*s  (outside domain)\n", maxKey, r.key)
+			fmt.Printf("  %-*s  (no data)\n", maxKey, r.key)
 		default:
 			fmt.Printf("  %-*s  %s\n", maxKey, r.key, formatValue(r.key, r.val))
 		}

@@ -87,6 +87,7 @@ func DecodeMessage(raw []byte) (*Field, error) {
 	var drs53Params DRS53Params
 	var hasDRS bool
 	var sec7 []byte
+	var bitmapData []byte // non-nil when Section 6 flag=0 (bitmap present)
 
 	for off < len(raw) {
 		// End marker
@@ -135,9 +136,18 @@ func DecodeMessage(raw []byte) (*Field, error) {
 			drsTemplate = tmpl
 			hasDRS = true
 		case 6:
-			// Section 6: Bitmap — check for no-bitmap flag
-			if len(sec) >= 6 && sec[5] != 255 {
-				return nil, fmt.Errorf("bitmap sections not supported (flag=%d)", sec[5])
+			// Section 6: Bitmap
+			if len(sec) < 6 {
+				return nil, fmt.Errorf("section 6 too short")
+			}
+			switch sec[5] {
+			case 255:
+				// No bitmap — all grid points have data
+			case 0:
+				// Bitmap present in this section (MSB-first bit array follows header)
+				bitmapData = sec[6:]
+			default:
+				return nil, fmt.Errorf("bitmap section: unsupported indicator %d", sec[5])
 			}
 		case 7:
 			sec7 = sec
@@ -166,6 +176,16 @@ func DecodeMessage(raw []byte) (*Field, error) {
 		vals, err = unpackDRS53(sec7, drs53Params)
 		if err != nil {
 			return nil, fmt.Errorf("unpack DRS 5.3: %w", err)
+		}
+	}
+
+	// Expand values to the full Ni×Nj grid when a bitmap is present.
+	// The unpack functions produce only N values (= number of set bits);
+	// applyBitmap inserts NaN at positions where the bitmap bit is 0.
+	if bitmapData != nil {
+		vals, err = applyBitmap(vals, bitmapData, int(int64(grid.Ni)*int64(grid.Nj)))
+		if err != nil {
+			return nil, fmt.Errorf("applying bitmap: %w", err)
 		}
 	}
 
