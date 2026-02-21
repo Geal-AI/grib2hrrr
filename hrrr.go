@@ -1,6 +1,7 @@
 package grib2hrrr
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -9,6 +10,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+)
+
+// Response body size limits.
+// Real HRRR .idx files are ~200 KB; single fields are ~600 KB.
+// These caps prevent OOM if a misbehaving server sends a huge body.
+// Issue #7: no response body size limit on io.ReadAll.
+const (
+	maxIdxBytes  = 10 << 20 // 10 MB
+	maxGRIBBytes = 50 << 20 // 50 MB
 )
 
 // Field is a decoded GRIB2 field: a Lambert conformal grid + float64 values.
@@ -40,17 +50,18 @@ func NewHRRRClient() *HRRRClient {
 // FetchField fetches and decodes a single GRIB2 field by variable/level.
 // t is the model run time (UTC), fxx is the forecast hour (0-48).
 // varLevel is an index search string, e.g. "TMP:700 mb".
-func (c *HRRRClient) FetchField(t time.Time, fxx int, varLevel string) (*Field, error) {
+// Issue #6: ctx is propagated to all HTTP calls so callers can cancel in-flight requests.
+func (c *HRRRClient) FetchField(ctx context.Context, t time.Time, fxx int, varLevel string) (*Field, error) {
 	idxURL, gribURL := c.urls(t, fxx)
 
 	// 1. Fetch index to find byte range
-	byteStart, byteEnd, err := c.findByteRange(idxURL, varLevel)
+	byteStart, byteEnd, err := c.findByteRange(ctx, idxURL, varLevel)
 	if err != nil {
 		return nil, fmt.Errorf("index lookup %q: %w", varLevel, err)
 	}
 
 	// 2. Fetch the raw GRIB2 message bytes
-	raw, err := c.fetchRange(gribURL, byteStart, byteEnd)
+	raw, err := c.fetchRange(ctx, gribURL, byteStart, byteEnd)
 	if err != nil {
 		return nil, fmt.Errorf("fetching GRIB2 bytes: %w", err)
 	}
@@ -76,7 +87,7 @@ func DecodeMessage(raw []byte) (*Field, error) {
 
 	for off < len(raw) {
 		// End marker
-		if off+4 <= len(raw) && string(raw[off:off+4]) == "7777" {
+		if off+4 <= len(raw) && raw[off] == '7' && raw[off+1] == '7' && raw[off+2] == '7' && raw[off+3] == '7' {
 			break
 		}
 		sLen, sNum, sec, next, err := sectionAt(raw, off)
@@ -139,10 +150,11 @@ func DecodeMessage(raw []byte) (*Field, error) {
 		return nil, fmt.Errorf("unpack DRS 5.3: %w", err)
 	}
 
-	expected := grid.Ni * grid.Nj
-	if len(vals) != expected {
+	// Issue #10: use int64 arithmetic for the product to avoid overflow on 32-bit platforms.
+	expected64 := int64(grid.Ni) * int64(grid.Nj)
+	if int64(len(vals)) != expected64 {
 		return nil, fmt.Errorf("decoded %d values, expected %d (%dx%d)",
-			len(vals), expected, grid.Ni, grid.Nj)
+			len(vals), expected64, grid.Ni, grid.Nj)
 	}
 
 	return &Field{Grid: *grid, Vals: vals}, nil
@@ -161,13 +173,25 @@ func (c *HRRRClient) urls(t time.Time, fxx int) (idxURL, gribURL string) {
 
 // findByteRange parses the HRRR index file and returns the byte range for varLevel.
 // varLevel is matched as a substring of the colon-delimited index line.
-func (c *HRRRClient) findByteRange(idxURL, varLevel string) (int64, int64, error) {
-	resp, err := c.HTTPClient.Get(idxURL)
+// Issue #6: ctx propagated. Issue #7: body limited. Issue #8: HTTP status checked.
+func (c *HRRRClient) findByteRange(ctx context.Context, idxURL, varLevel string) (int64, int64, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", idxURL, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+
+	// Issue #8: check HTTP status before reading body.
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("index fetch HTTP %d for %s", resp.StatusCode, idxURL)
+	}
+
+	// Issue #7: limit body size to prevent OOM from a misbehaving server.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxIdxBytes))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -186,7 +210,8 @@ func (c *HRRRClient) findByteRange(idxURL, varLevel string) (int64, int64, error
 			continue
 		}
 		// End byte: start of next line - 1, or end of file
-		var end int64
+		// Issue #12: use -1 sentinel instead of 0 to avoid ambiguity with byte offset 0.
+		var end int64 = -1
 		if i+1 < len(lines) {
 			nextParts := strings.Split(lines[i+1], ":")
 			if len(nextParts) >= 2 {
@@ -196,7 +221,7 @@ func (c *HRRRClient) findByteRange(idxURL, varLevel string) (int64, int64, error
 				}
 			}
 		}
-		if end == 0 {
+		if end < 0 {
 			end = math.MaxInt64 // last message: fetch to EOF
 		}
 		return start, end, nil
@@ -205,8 +230,9 @@ func (c *HRRRClient) findByteRange(idxURL, varLevel string) (int64, int64, error
 }
 
 // fetchRange does an HTTP range request and returns the bytes.
-func (c *HRRRClient) fetchRange(url string, start, end int64) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
+// Issue #6: ctx propagated. Issue #7: body limited.
+func (c *HRRRClient) fetchRange(ctx context.Context, url string, start, end int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -224,11 +250,13 @@ func (c *HRRRClient) fetchRange(url string, start, end int64) ([]byte, error) {
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d fetching %s", resp.StatusCode, url)
 	}
-	return io.ReadAll(resp.Body)
+	// Issue #7: limit body size.
+	return io.ReadAll(io.LimitReader(resp.Body, maxGRIBBytes))
 }
 
 // FetchRaw fetches raw bytes for a variable using pre-known byte offsets.
 // This is useful for testing with a fixed known range.
-func (c *HRRRClient) FetchRaw(gribURL string, byteStart, byteEnd int64) ([]byte, error) {
-	return c.fetchRange(gribURL, byteStart, byteEnd)
+// Issue #6: ctx propagated.
+func (c *HRRRClient) FetchRaw(ctx context.Context, gribURL string, byteStart, byteEnd int64) ([]byte, error) {
+	return c.fetchRange(ctx, gribURL, byteStart, byteEnd)
 }

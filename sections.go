@@ -22,25 +22,40 @@ type Section3 struct {
 
 // DRS53Params holds all parameters from DRS Template 5.3.
 type DRS53Params struct {
-	ReferenceValue    float64
-	BinaryScaleFactor int
+	ReferenceValue     float64
+	BinaryScaleFactor  int
 	DecimalScaleFactor int
-	Nbits             int // bits per group reference value
-	TypeOfValue       byte
-	SplittingMethod   byte
-	MissingMgmt       byte
-	PrimaryMissing    float64
-	SecondaryMissing  float64
-	NG                int // number of groups
-	RefGroupWidth     int
-	BitsGroupWidth    int
-	RefGroupLength    uint32
-	LengthIncrement   byte
-	LenLastGroup      uint32
-	BitsGroupLength   int
-	OrderSpatialDiff  int
-	NOctetsExtra      int
+	Nbits              int // bits per group reference value
+	TypeOfValue        byte
+	SplittingMethod    byte
+	MissingMgmt        byte
+	PrimaryMissing     float64
+	SecondaryMissing   float64
+	NG                 int // number of groups
+	RefGroupWidth      int
+	BitsGroupWidth     int
+	RefGroupLength     uint32
+	LengthIncrement    byte
+	LenLastGroup       uint32
+	BitsGroupLength    int
+	OrderSpatialDiff   int
+	NOctetsExtra       int
 }
+
+// Input sanity limits — all well above any real HRRR file values.
+const (
+	// maxNG: real HRRR files have ~3700 groups; cap at 4M to prevent OOM allocs.
+	// Issue #1: memory exhaustion via unbounded ng allocation.
+	maxNG = 1 << 22 // 4,194,304
+
+	// maxGridDim: HRRR CONUS is 1799×1059. Cap at 30000 per dimension.
+	// Issue #10: Ni/Nj bounds.
+	maxGridDim = 30000
+
+	// maxBitWidth: bit fields for group widths/lengths are 1-byte values (0-255),
+	// but any value > 64 is nonsensical for a uint64 accumulator.
+	maxBitWidth = 64
+)
 
 // parseSection0 decodes the 16-byte indicator section.
 func parseSection0(b []byte) (Section0, error) {
@@ -59,21 +74,24 @@ func parseSection0(b []byte) (Section0, error) {
 
 // sectionAt finds a section starting at byte offset off in buf.
 // Returns (sectionLen, sectionNum, sectionData, nextOffset).
+// The "7777" end marker is only 4 bytes, so it is checked before the 5-byte header guard.
 func sectionAt(buf []byte, off int) (uint32, byte, []byte, int, error) {
+	// Check for "7777" end marker first — it is only 4 bytes, not a normal section.
+	if off+4 <= len(buf) && buf[off] == '7' && buf[off+1] == '7' && buf[off+2] == '7' && buf[off+3] == '7' {
+		return 4, 8, buf[off : off+4], off + 4, nil
+	}
 	if off+5 > len(buf) {
 		return 0, 0, nil, 0, fmt.Errorf("section header at %d: out of bounds (buf=%d)", off, len(buf))
 	}
-	// Check for end section "7777"
-	if buf[off] == '7' && off+4 <= len(buf) && string(buf[off:off+4]) == "7777" {
-		return 4, 8, buf[off : off+4], off + 4, nil
-	}
 	sLen := binary.BigEndian.Uint32(buf[off : off+4])
 	sNum := buf[off+4]
-	end := off + int(sLen)
-	if end > len(buf) {
+	// Issue #10: use uint64 arithmetic to avoid int overflow on 32-bit platforms.
+	end64 := uint64(off) + uint64(sLen)
+	if end64 > uint64(len(buf)) {
 		return 0, 0, nil, 0, fmt.Errorf("section %d at %d: length %d overflows buffer %d",
 			sNum, off, sLen, len(buf))
 	}
+	end := int(end64)
 	return sLen, sNum, buf[off:end], end, nil
 }
 
@@ -109,6 +127,13 @@ func parseSection3HRRR(sec []byte) (Section3, error) {
 
 	ni := int(u32(16))
 	nj := int(u32(20))
+
+	// Issue #10: validate grid dimensions before use.
+	if ni <= 0 || ni > maxGridDim || nj <= 0 || nj > maxGridDim {
+		return Section3{}, fmt.Errorf("section 3: invalid grid dimensions %dx%d (max %d)",
+			ni, nj, maxGridDim)
+	}
+
 	la1 := float64(int32(u32(24))) / 1e6
 	lo1 := float64(u32(28)) / 1e6
 	// g+32: resolution flags (skip)
@@ -120,17 +145,24 @@ func parseSection3HRRR(sec []byte) (Section3, error) {
 	latin1 := float64(int32(u32(51))) / 1e6
 	latin2 := float64(int32(u32(55))) / 1e6
 
+	// Issue #9: ScanMode is parsed but the grid operations assume 0x40.
+	// Reject unsupported modes rather than silently returning wrong values.
+	// ⚠️ Safety: wrong scan mode → wrong grid values in safety-critical applications.
+	if scanMode != 0x40 {
+		return Section3{}, fmt.Errorf("section 3: unsupported scan mode 0x%02X (only 0x40 supported)", scanMode)
+	}
+
 	return Section3{
 		Grid: LambertGrid{
-			Ni:     ni,
-			Nj:     nj,
-			La1:    la1,
-			Lo1:    lo1,
-			LoV:    lov,
-			Latin1: latin1,
-			Latin2: latin2,
-			Dx:     dx,
-			Dy:     dy,
+			Ni:       ni,
+			Nj:       nj,
+			La1:      la1,
+			Lo1:      lo1,
+			LoV:      lov,
+			Latin1:   latin1,
+			Latin2:   latin2,
+			Dx:       dx,
+			Dy:       dy,
 			ScanMode: scanMode,
 		},
 	}, nil
@@ -159,6 +191,13 @@ func parseDRS53(sec []byte) (DRS53Params, error) {
 	secMiss := math.Float32frombits(binary.BigEndian.Uint32(t[16:20]))
 
 	ng := int(binary.BigEndian.Uint32(t[20:24]))
+
+	// Issue #1/#3: validate ng before allocating slices sized by it.
+	// A crafted ng=0xFFFFFFFF would cause ~96 GB of allocation.
+	if ng < 1 || ng > maxNG {
+		return DRS53Params{}, fmt.Errorf("section 5: ng=%d out of valid range [1, %d]", ng, maxNG)
+	}
+
 	refGroupWidth := int(t[24])
 	bitsGroupWidth := int(t[25])
 	refGroupLen := binary.BigEndian.Uint32(t[26:30])
@@ -167,6 +206,17 @@ func parseDRS53(sec []byte) (DRS53Params, error) {
 	bitsGroupLen := int(t[35])
 	orderSD := int(t[36])
 	nOctetsExtra := int(t[37])
+
+	// Validate bit widths — values > 64 are nonsensical for a uint64 accumulator.
+	if nBits > maxBitWidth {
+		return DRS53Params{}, fmt.Errorf("section 5: Nbits=%d exceeds %d", nBits, maxBitWidth)
+	}
+	if bitsGroupWidth > maxBitWidth {
+		return DRS53Params{}, fmt.Errorf("section 5: BitsGroupWidth=%d exceeds %d", bitsGroupWidth, maxBitWidth)
+	}
+	if bitsGroupLen > maxBitWidth {
+		return DRS53Params{}, fmt.Errorf("section 5: BitsGroupLength=%d exceeds %d", bitsGroupLen, maxBitWidth)
+	}
 
 	return DRS53Params{
 		ReferenceValue:     float64(R),

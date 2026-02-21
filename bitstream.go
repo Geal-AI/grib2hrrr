@@ -5,13 +5,15 @@ import "fmt"
 // bitReader reads unsigned integers of arbitrary bit width from a byte slice.
 // Bits are consumed MSB-first within each byte (big-endian bit order).
 type bitReader struct {
-	buf  []byte
-	pos  int // current bit position
+	buf []byte
+	pos int // current bit position
 }
 
 func newBitReader(b []byte) *bitReader { return &bitReader{buf: b} }
 
 // read reads n bits (0 ≤ n ≤ 64) and returns them as a uint64.
+// Issue #5: mustRead has been removed — library code must never panic on untrusted
+// input. All callers use read() with proper error handling.
 func (r *bitReader) read(n int) (uint64, error) {
 	if n == 0 {
 		return 0, nil
@@ -30,15 +32,6 @@ func (r *bitReader) read(n int) (uint64, error) {
 	}
 	r.pos = end
 	return v, nil
-}
-
-// mustRead panics on error; used where errors indicate a corrupt file.
-func (r *bitReader) mustRead(n int) uint64 {
-	v, err := r.read(n)
-	if err != nil {
-		panic(err)
-	}
-	return v
 }
 
 // align advances pos to the next byte boundary.
