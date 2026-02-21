@@ -45,11 +45,12 @@ jobs:
 
       - name: Generate test report markdown
         if: always()
-        run: python3 .github/scripts/gen-test-report.py \
-               test-output.json \
-               coverage.txt \
-               "${{ github.ref_name }}" \
-               > test-report.md
+        run: |
+          python3 .github/scripts/gen-test-report.py \
+            test-output.json \
+            coverage.txt \
+            "${{ github.ref_name }}" \
+            > test-report.md
 
       - name: Write step summary
         if: always()
