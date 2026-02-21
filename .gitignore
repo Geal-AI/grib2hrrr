@@ -6,3 +6,6 @@
 
 # Go test cache
 *.test
+
+# Built CLI binary
+/hrrr
