@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-          cache: true
+          cache: false
 
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
