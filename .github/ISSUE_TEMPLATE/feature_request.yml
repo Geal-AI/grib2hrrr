@@ -1,0 +1,50 @@
+name: Feature Request
+description: Suggest an improvement or new capability
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Great — we'd love to hear it. Please describe what you
+        need and why it would be useful.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: |
+        Describe the use case or limitation you're running into.
+        "I want to fetch wind speed at 10 m but there's no way to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work? API sketch, pseudocode, etc.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other approaches, workarounds, or existing libraries.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - New GRIB2 field / variable
+        - New grid type (GDT template)
+        - New packing type (DRS template)
+        - API / usability improvement
+        - Performance
+        - Documentation
+        - Other
+    validations:
+      required: true
