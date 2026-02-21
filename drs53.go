@@ -141,25 +141,23 @@ func unpackDRS53(sec7 []byte, p DRS53Params) ([]float64, error) {
 		return nil, fmt.Errorf("drs53: expected %d values, got %d", total, len(packed))
 	}
 
-	// --- Step 7: Add minimum bias (yMin) to restore differenced values ---
-	z := make([]int64, total)
-	for i := range packed {
-		z[i] = packed[i] + yMin
-	}
-
-	// --- Step 8: Undo spatial differencing ---
-	undiff := make([]int64, total)
+	// --- Steps 7+8: Undo spatial differencing in-place, applying yMin as we go.
+	// Issue #20: reuse `packed` to avoid two extra allocations (z + undiff slices).
+	// z[i] = packed[i] + yMin; undiff is built on top of z.
+	// Note: z[0..order-1] are never read during undiff (initVals seed those positions),
+	// so overwriting them with initVals is safe.
+	acc := packed // alias; packed is not accessed after this point
 	switch order {
 	case 1:
-		undiff[0] = initVals[0]
+		acc[0] = initVals[0] // z[0] unused; seed with initVal
 		for i := 1; i < total; i++ {
-			undiff[i] = z[i] + undiff[i-1]
+			acc[i] = (acc[i] + yMin) + acc[i-1] // z[i] + undiff[i-1]
 		}
 	case 2:
-		undiff[0] = initVals[0]
-		undiff[1] = initVals[1]
+		acc[0] = initVals[0] // z[0] unused
+		acc[1] = initVals[1] // z[1] unused
 		for i := 2; i < total; i++ {
-			undiff[i] = z[i] + 2*undiff[i-1] - undiff[i-2]
+			acc[i] = (acc[i] + yMin) + 2*acc[i-1] - acc[i-2]
 		}
 	}
 
@@ -170,7 +168,7 @@ func unpackDRS53(sec7 []byte, p DRS53Params) ([]float64, error) {
 	scaleD := math.Pow(10, float64(p.DecimalScaleFactor))
 
 	result := make([]float64, total)
-	for i, x := range undiff {
+	for i, x := range acc {
 		result[i] = (R + scaleE*float64(x)) / scaleD
 	}
 	return result, nil
