@@ -1,0 +1,36 @@
+{
+  "source": "herbie/cfgrib",
+  "grib_url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20260219/conus/hrrr.t12z.wrfsfcf00.grib2",
+  "byte_start": 11928132,
+  "byte_end": 12500283,
+  "field": "TMP:700 mb",
+  "run": "2026-02-19T12:00:00Z",
+  "fxx": 0,
+  "tolerance_K": 0.01,
+  "points": [
+    {
+      "name": "Vail Pass CO",
+      "lat": 39.54,
+      "lon": -106.19,
+      "value_K": 259.061798,
+      "grid_i": 651,
+      "grid_j": 579
+    },
+    {
+      "name": "Denver CO",
+      "lat": 39.74,
+      "lon": -104.98,
+      "value_K": 261.374298,
+      "grid_i": 686,
+      "grid_j": 584
+    },
+    {
+      "name": "Seattle WA",
+      "lat": 47.61,
+      "lon": -122.33,
+      "value_K": 256.686798,
+      "grid_i": 278,
+      "grid_j": 953
+    }
+  ]
+}
