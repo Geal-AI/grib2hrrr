@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# OMC / Claude Code agent state
+**/.omc/
+
+# Go test cache
+*.test
