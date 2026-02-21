@@ -1,0 +1,65 @@
+name: Bug Report
+description: Something isn't working correctly
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to file a bug report. Please fill in as
+        much detail as you can — it helps us fix things faster.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I call FetchField with TMP:700 mb, the decoded values are ~12°C off.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal code or commands that demonstrate the problem.
+      render: go
+      placeholder: |
+        c := grib2hrrr.NewHRRRClient()
+        field, err := c.FetchField(ctx, run, 0, "TMP:700 mb")
+        // ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      placeholder: Should return ~259 K. Got ~247 K.
+    validations:
+      required: true
+
+  - type: input
+    id: go_version
+    attributes:
+      label: Go version
+      placeholder: go1.22.0
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / architecture
+      placeholder: macOS arm64 / Linux amd64
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: |
+        Any other information — GRIB2 variable/level, HRRR run time, error messages,
+        hex dumps of malformed input, etc.
+    validations:
+      required: false

@@ -1,6 +1,7 @@
 package grib2hrrr_test
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 // Reference: herbie/cfgrib, HRRR 2026-02-19 T12Z F00, TMP:700 mb
 // Nearest-neighbour lookup at each point.
 const (
-	refGRIBURL  = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20260219/conus/hrrr.t12z.wrfsfcf00.grib2"
+	refGRIBURL   = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20260219/conus/hrrr.t12z.wrfsfcf00.grib2"
 	refByteStart = int64(11928132)
 	refByteEnd   = int64(12500283)
 )
@@ -28,9 +29,13 @@ var refPoints = []struct {
 }
 
 // TestLambertGridParams verifies the HRRR grid constants.
+// Requires network access to NOAA S3 — skipped in short mode.
 func TestLambertGridParams(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: requires network access to NOAA S3")
+	}
 	c := grib2hrrr.NewHRRRClient()
-	raw, err := c.FetchRaw(refGRIBURL, refByteStart, refByteEnd)
+	raw, err := c.FetchRaw(context.Background(), refGRIBURL, refByteStart, refByteEnd)
 	if err != nil {
 		t.Fatalf("FetchRaw: %v", err)
 	}
@@ -54,8 +59,8 @@ func TestLambertGridParams(t *testing.T) {
 		t.Errorf("Nj: got %d, want 1059", g.Nj)
 	}
 	check("La1", g.La1, 21.138123, 1e-5)
-	check("Lo1", normLon(g.Lo1), -122.719528, 1e-4)
-	check("LoV", normLon(g.LoV), -97.5, 1e-4)
+	check("Lo1", grib2hrrr.NormLon(g.Lo1), -122.719528, 1e-4)
+	check("LoV", grib2hrrr.NormLon(g.LoV), -97.5, 1e-4)
 	check("Latin1", g.Latin1, 38.5, 1e-4)
 	check("Latin2", g.Latin2, 38.5, 1e-4)
 	check("Dx", g.Dx, 3000.0, 1.0)
@@ -66,9 +71,13 @@ func TestLambertGridParams(t *testing.T) {
 }
 
 // TestGridIndices verifies LatLonToIJ against herbie's nearest-neighbour indices.
+// Requires network access to NOAA S3 — skipped in short mode.
 func TestGridIndices(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: requires network access to NOAA S3")
+	}
 	c := grib2hrrr.NewHRRRClient()
-	raw, err := c.FetchRaw(refGRIBURL, refByteStart, refByteEnd)
+	raw, err := c.FetchRaw(context.Background(), refGRIBURL, refByteStart, refByteEnd)
 	if err != nil {
 		t.Fatalf("FetchRaw: %v", err)
 	}
@@ -91,9 +100,13 @@ func TestGridIndices(t *testing.T) {
 }
 
 // TestFieldValues verifies decoded TMP 700mb values against Python/herbie reference.
+// Requires network access to NOAA S3 — skipped in short mode.
 func TestFieldValues(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: requires network access to NOAA S3")
+	}
 	c := grib2hrrr.NewHRRRClient()
-	raw, err := c.FetchRaw(refGRIBURL, refByteStart, refByteEnd)
+	raw, err := c.FetchRaw(context.Background(), refGRIBURL, refByteStart, refByteEnd)
 	if err != nil {
 		t.Fatalf("FetchRaw: %v", err)
 	}
@@ -119,9 +132,13 @@ func TestFieldValues(t *testing.T) {
 }
 
 // TestCornerAndCenterValues verifies grid corner and center values.
+// Requires network access to NOAA S3 — skipped in short mode.
 func TestCornerAndCenterValues(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: requires network access to NOAA S3")
+	}
 	c := grib2hrrr.NewHRRRClient()
-	raw, err := c.FetchRaw(refGRIBURL, refByteStart, refByteEnd)
+	raw, err := c.FetchRaw(context.Background(), refGRIBURL, refByteStart, refByteEnd)
 	if err != nil {
 		t.Fatalf("FetchRaw: %v", err)
 	}
@@ -158,13 +175,14 @@ func TestCornerAndCenterValues(t *testing.T) {
 }
 
 // TestFetchField exercises the high-level FetchField API.
+// Requires network access to NOAA S3 — always skipped in short mode.
 func TestFetchField(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping network test in short mode")
 	}
 	c := grib2hrrr.NewHRRRClient()
 	run := time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC)
-	field, err := c.FetchField(run, 0, "TMP:700 mb")
+	field, err := c.FetchField(context.Background(), run, 0, "TMP:700 mb")
 	if err != nil {
 		t.Fatalf("FetchField: %v", err)
 	}
@@ -175,13 +193,6 @@ func TestFetchField(t *testing.T) {
 		t.Errorf("Vail Pass: got %.4f K, want %.4f K", got, want)
 	}
 	t.Logf("Vail Pass 700mb: %.4f K ✓", got)
-}
-
-func normLon(lon float64) float64 {
-	if lon > 180 {
-		return lon - 360
-	}
-	return lon
 }
 
 func abs(x int) int {

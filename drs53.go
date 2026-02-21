@@ -6,6 +6,11 @@ import (
 	"math"
 )
 
+// maxTotal is the maximum number of decoded values allowed from a single GRIB2 message.
+// HRRR CONUS is 1799×1059 = ~1.9M. Cap at 10M to prevent OOM from crafted inputs.
+// Issue #2: total accumulation overflow + OOM.
+const maxTotal = 10_000_000
+
 // unpackDRS53 decodes a DRS Template 5.3 (complex packing + spatial differencing)
 // Section 7. sec7 is the raw section 7 bytes (including the 5-byte section header).
 // p is DRS53Params decoded from Section 5.
@@ -24,6 +29,13 @@ func unpackDRS53(sec7 []byte, p DRS53Params) ([]float64, error) {
 		return nil, fmt.Errorf("drs53: unsupported extra descriptor octets %d", m)
 	}
 
+	ng := p.NG
+	// Issue #3: defence-in-depth guard — parseDRS53 already rejects ng<1,
+	// but guard here too since DRS53Params can be constructed directly.
+	if ng < 1 {
+		return nil, fmt.Errorf("drs53: ng=%d is invalid (must be >= 1)", ng)
+	}
+
 	// --- Step 1: Read extra descriptors (initial values + minimum bias) ---
 	extraBytes := (order + 1) * m
 	if len(data) < extraBytes {
@@ -40,7 +52,6 @@ func unpackDRS53(sec7 []byte, p DRS53Params) ([]float64, error) {
 	br := newBitReader(data[extraBytes:])
 
 	// --- Step 2: Read group reference values (NG × nBits bits) ---
-	ng := p.NG
 	nBits := p.Nbits
 	grefs := make([]int64, ng)
 	for i := 0; i < ng; i++ {
@@ -84,11 +95,29 @@ func unpackDRS53(sec7 []byte, p DRS53Params) ([]float64, error) {
 	lengths[ng-1] = int(p.LenLastGroup)
 	br.align() // pad to byte boundary after lengths
 
-	// --- Step 5: Read grouped data values ---
+	// --- Step 5: Compute total and validate ---
+	// Issue #2: cap total to prevent OOM from crafted group lengths.
 	total := 0
 	for _, l := range lengths {
+		if l < 0 {
+			return nil, fmt.Errorf("drs53: negative group length %d", l)
+		}
 		total += l
+		if total > maxTotal {
+			return nil, fmt.Errorf("drs53: total point count %d exceeds maximum %d", total, maxTotal)
+		}
 	}
+
+	// Issue #4: spatial differencing requires enough initial values.
+	// ⚠️ Safety: unchecked access to undiff[0]/undiff[1] would panic on corrupt input.
+	if order >= 1 && total < 1 {
+		return nil, fmt.Errorf("drs53: order-%d spatial diff requires total>=1, got %d", order, total)
+	}
+	if order >= 2 && total < 2 {
+		return nil, fmt.Errorf("drs53: order-2 spatial diff requires total>=2, got %d", total)
+	}
+
+	// --- Step 6: Read grouped data values ---
 	packed := make([]int64, 0, total)
 
 	for g := 0; g < ng; g++ {
@@ -112,35 +141,34 @@ func unpackDRS53(sec7 []byte, p DRS53Params) ([]float64, error) {
 		return nil, fmt.Errorf("drs53: expected %d values, got %d", total, len(packed))
 	}
 
-	// --- Step 6: Add minimum bias (yMin) to restore differenced values ---
-	z := make([]int64, total)
-	for i := range packed {
-		z[i] = packed[i] + yMin
-	}
-
-	// --- Step 7: Undo spatial differencing ---
-	undiff := make([]int64, total)
+	// --- Steps 7+8: Undo spatial differencing in-place, applying yMin as we go.
+	// Issue #20: reuse `packed` to avoid two extra allocations (z + undiff slices).
+	// z[i] = packed[i] + yMin; undiff is built on top of z.
+	// Note: z[0..order-1] are never read during undiff (initVals seed those positions),
+	// so overwriting them with initVals is safe.
+	acc := packed // alias; packed is not accessed after this point
 	switch order {
 	case 1:
-		undiff[0] = initVals[0]
+		acc[0] = initVals[0] // z[0] unused; seed with initVal
 		for i := 1; i < total; i++ {
-			undiff[i] = z[i] + undiff[i-1]
+			acc[i] = (acc[i] + yMin) + acc[i-1] // z[i] + undiff[i-1]
 		}
 	case 2:
-		undiff[0] = initVals[0]
-		undiff[1] = initVals[1]
+		acc[0] = initVals[0] // z[0] unused
+		acc[1] = initVals[1] // z[1] unused
 		for i := 2; i < total; i++ {
-			undiff[i] = z[i] + 2*undiff[i-1] - undiff[i-2]
+			acc[i] = (acc[i] + yMin) + 2*acc[i-1] - acc[i-2]
 		}
 	}
 
-	// --- Step 8: Apply scale formula: Y = (R + 2^E * X) / 10^D ---
+	// --- Step 9: Apply scale formula: Y = (R + 2^E * X) / 10^D ---
 	R := p.ReferenceValue
-	scaleE := math.Pow(2, float64(p.BinaryScaleFactor))
+	// Issue #13: use math.Ldexp for exact integer powers of two instead of math.Pow.
+	scaleE := math.Ldexp(1.0, p.BinaryScaleFactor)
 	scaleD := math.Pow(10, float64(p.DecimalScaleFactor))
 
 	result := make([]float64, total)
-	for i, x := range undiff {
+	for i, x := range acc {
 		result[i] = (R + scaleE*float64(x)) / scaleD
 	}
 	return result, nil

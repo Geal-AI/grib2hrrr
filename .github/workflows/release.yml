@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # required to create a GitHub release
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for changelog generation
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Install tools
+        run: go install gotest.tools/gotestsum@latest
+
+      # Run full test suite (-short skips live S3 tests that require credentials).
+      # If you add S3 credentials as secrets, remove -short to run network tests too.
+      - name: Run tests
+        run: |
+          gotestsum \
+            --format standard-verbose \
+            --junitfile test-results.xml \
+            --jsonfile test-output.json \
+            -- -short -race -count=1 ./...
+
+      - name: Compute coverage
+        run: |
+          go test -short -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out > coverage.txt
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
+          echo "COVERAGE=${COVERAGE}" >> "$GITHUB_ENV"
+
+      - name: Generate test report markdown
+        if: always()
+        run: python3 .github/scripts/gen-test-report.py \
+               test-output.json \
+               coverage.txt \
+               "${{ github.ref_name }}" \
+               > test-report.md
+
+      - name: Write step summary
+        if: always()
+        run: cat test-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate release notes
+        run: |
+          # Derive previous tag for changelog range
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "PREV_TAG=${PREV_TAG}" >> "$GITHUB_ENV"
+
+          # Build release body: header + changelog + test report
+          {
+            echo "## grib2hrrr ${{ github.ref_name }}"
+            echo ""
+            if [ -n "${PREV_TAG}" ]; then
+              echo "### Changes since ${PREV_TAG}"
+              echo ""
+              git log "${PREV_TAG}..HEAD" \
+                --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))" \
+                --no-merges
+              echo ""
+              echo ""
+            fi
+            cat test-report.md
+          } > release-body.md
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            test-results.xml
+            test-report.md
+            coverage.out
+            coverage.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-body.md
+          files: |
+            test-results.xml
+            coverage.txt
+          generate_release_notes: false
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
