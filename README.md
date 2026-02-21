@@ -201,14 +201,16 @@ Values validated against Python/herbie (HRRR run 2026-02-21T01Z, F00, TMP:700 mb
 
 ```
 grib2hrrr/
-├── hrrr.go        # HRRRClient, FetchField, DecodeMessage — S3 + decode pipeline
-├── sections.go    # GRIB2 section parsers: S0 (indicator), S3 (grid), S5 (DRS header)
-├── lambert.go     # GDT 3.30 Lambert conformal conic — projection + Lookup()
-├── drs0.go        # DRS 5.0 simple packing decoder
-├── drs53.go       # DRS 5.3 complex packing decoder — groups, spatial diff, scale
-├── bitmap.go      # Section 6 bitmap expand — fills NaN at missing grid points
-├── bitstream.go   # MSB-first bit reader with byte-boundary alignment (br.align())
-└── cmd/hrrr/      # CLI: -var, -all, -json, -fxx, -run, -list flags
+├── client.go    # HRRRClient — HTTP/S3 range fetch, index parsing
+├── decode.go    # DecodeMessage — GRIB2 section dispatch pipeline
+├── field.go     # Field type + Lookup (nearest-neighbour lat/lon lookup)
+├── lambert.go   # GDT 3.30 Lambert conformal conic projection
+├── sections.go  # Low-level GRIB2 section parsers (S0, S3, S5)
+├── drs0.go      # DRS Template 5.0 — simple packing decoder
+├── drs53.go     # DRS Template 5.3 — complex packing + spatial differencing
+├── bitmap.go    # Section 6 bitmap — expands packed values to full Ni×Nj grid
+├── bitstream.go # MSB-first bit reader with byte-boundary alignment
+└── cmd/hrrr/   # CLI: -var, -all, -json, -fxx, -run, -list
 ```
 
 ## Requirements
