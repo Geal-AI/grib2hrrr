@@ -140,8 +140,8 @@ func TestBitReaderAlignMidByte(t *testing.T) {
 // TestBitReaderBytePos verifies bytePos returns the correct byte offset.
 func TestBitReaderBytePos(t *testing.T) {
 	r := newBitReader([]byte{0xFF, 0x00, 0xAB})
-	r.read(8)  // consume first byte
-	r.read(8)  // consume second byte
+	r.read(8) // consume first byte
+	r.read(8) // consume second byte
 	if r.bytePos() != 2 {
 		t.Errorf("bytePos(): got %d, want 2", r.bytePos())
 	}

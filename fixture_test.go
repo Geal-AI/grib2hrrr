@@ -11,20 +11,20 @@ import (
 
 // goldenPoint mirrors the "points" entries in testdata/golden_tmp700mb.json.
 type goldenPoint struct {
-	Name    string  `json:"name"`
-	Lat     float64 `json:"lat"`
-	Lon     float64 `json:"lon"`
-	ValueK  float64 `json:"value_K"`
-	GridI   int     `json:"grid_i"`
-	GridJ   int     `json:"grid_j"`
+	Name   string  `json:"name"`
+	Lat    float64 `json:"lat"`
+	Lon    float64 `json:"lon"`
+	ValueK float64 `json:"value_K"`
+	GridI  int     `json:"grid_i"`
+	GridJ  int     `json:"grid_j"`
 }
 
 // goldenFile mirrors the top-level structure of testdata/golden_tmp700mb.json.
 type goldenFile struct {
-	Source      string        `json:"source"`
-	Field       string        `json:"field"`
-	ToleranceK  float64       `json:"tolerance_K"`
-	Points      []goldenPoint `json:"points"`
+	Source     string        `json:"source"`
+	Field      string        `json:"field"`
+	ToleranceK float64       `json:"tolerance_K"`
+	Points     []goldenPoint `json:"points"`
 }
 
 const (

@@ -32,7 +32,7 @@ func TestDecodeScaleFactorNegative(t *testing.T) {
 		want int
 	}{
 		{0x8001, -1},
-		{0x8000, 0},    // sign bit set, magnitude 0 → −0 = 0
+		{0x8000, 0}, // sign bit set, magnitude 0 → −0 = 0
 		{0xFFFF, -32767},
 		{0x800A, -10},
 	}
@@ -51,11 +51,17 @@ func TestDecodeScaleFactorNegative(t *testing.T) {
 func TestParseSection0ValidHeader(t *testing.T) {
 	buf := make([]byte, 16)
 	copy(buf[0:4], "GRIB")
-	buf[6] = 0    // discipline: meteorological
-	buf[7] = 2    // edition 2
+	buf[6] = 0 // discipline: meteorological
+	buf[7] = 2 // edition 2
 	// total length = 0x0000_0000_0001_0000 = 65536
-	buf[8] = 0; buf[9] = 0; buf[10] = 0; buf[11] = 0
-	buf[12] = 0; buf[13] = 1; buf[14] = 0; buf[15] = 0
+	buf[8] = 0
+	buf[9] = 0
+	buf[10] = 0
+	buf[11] = 0
+	buf[12] = 0
+	buf[13] = 1
+	buf[14] = 0
+	buf[15] = 0
 
 	s, err := parseSection0(buf)
 	if err != nil {
@@ -154,7 +160,7 @@ func TestSectionAtLengthOverflowsBufferReturnsError(t *testing.T) {
 	// Claim section is 100 bytes long, but buffer is only 9 bytes.
 	buf := []byte{
 		0x00, 0x00, 0x00, 0x64, // length = 100
-		0x03,                   // section 3
+		0x03, // section 3
 		0x00, 0x00, 0x00, 0x00,
 	}
 	_, _, _, _, err := sectionAt(buf, 0)
@@ -168,7 +174,7 @@ func TestSectionAtNonZeroOffset(t *testing.T) {
 	prefix := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	section := []byte{
 		0x00, 0x00, 0x00, 0x05, // length = 5
-		0x07,                   // section 7
+		0x07, // section 7
 	}
 	buf := append(prefix, section...)
 	_, sNum, _, _, err := sectionAt(buf, 4)

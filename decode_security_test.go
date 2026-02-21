@@ -199,7 +199,7 @@ func TestSectionAtMaxUint32SLen(t *testing.T) {
 func TestSectionAtValidSection(t *testing.T) {
 	buf := make([]byte, 10)
 	binary.BigEndian.PutUint32(buf[0:4], 10) // sLen=10, fits exactly
-	buf[4] = 3                                // section number
+	buf[4] = 3                               // section number
 	sLen, sNum, sec, next, err := sectionAt(buf, 0)
 	if err != nil {
 		t.Fatalf("sectionAt: unexpected error: %v", err)
@@ -273,12 +273,12 @@ func TestDecodeScaleFactor(t *testing.T) {
 		raw  uint16
 		want int
 	}{
-		{0x0000, 0},     // zero
-		{0x0001, 1},     // +1
-		{0x8001, -1},    // -1 (sign bit set, magnitude 1)
-		{0x7FFF, 32767}, // max positive
-		{0xFFFF, -32767},// max negative
-		{0x8000, 0},     // -0 (sign bit, magnitude 0) → 0
+		{0x0000, 0},      // zero
+		{0x0001, 1},      // +1
+		{0x8001, -1},     // -1 (sign bit set, magnitude 1)
+		{0x7FFF, 32767},  // max positive
+		{0xFFFF, -32767}, // max negative
+		{0x8000, 0},      // -0 (sign bit, magnitude 0) → 0
 	}
 	for _, tc := range tests {
 		got := decodeScaleFactor(tc.raw)

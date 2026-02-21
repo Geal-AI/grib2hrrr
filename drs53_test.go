@@ -52,7 +52,7 @@ func TestReadSignMagOctets(t *testing.T) {
 	}{
 		// 1-byte cases
 		{"1-byte positive zero", []byte{0x00}, 0},
-		{"1-byte negative zero", []byte{0x80}, 0},  // sign bit set, magnitude 0 = -0 = 0
+		{"1-byte negative zero", []byte{0x80}, 0}, // sign bit set, magnitude 0 = -0 = 0
 		{"1-byte positive 1", []byte{0x01}, 1},
 		{"1-byte positive 127", []byte{0x7F}, 127},
 		{"1-byte negative 1", []byte{0x81}, -1},
@@ -132,36 +132,39 @@ func TestUnpackDRS53TooShortForExtraDescriptors(t *testing.T) {
 // 1-group, order-1 spatially differenced message with 3 values.
 //
 // Construction:
-//   order=1, m=1, NG=1, nBits=4 (group ref bits), BitsGroupWidth=0, BitsGroupLength=0
-//   initVals[0]=10, yMin=0
-//   group ref=0, width=4, length=3 (LenLastGroup), values packed: 0,1,2
-//   Decode: z = packed + yMin = [0,1,2]
-//   undiff: undiff[0]=10, undiff[1]=10+0=10, undiff[2]=10+1=11, undiff[3]=10+2=12
-//   Wait — order-1: undiff[0]=initVals[0], undiff[i]=z[i]+undiff[i-1]
-//   z[0]=0, z[1]=1, z[2]=2 → undiff[0]=10, undiff[1]=0+10=10, undiff[2]=1+10=11 ? No:
-//   After bias: z[i] = packed[i] + yMin. yMin=0, so z=[0,1,2]
-//   undiff[0]=10, undiff[1]=z[1]+undiff[0]=1+10=11, undiff[2]=z[2]+undiff[1]=2+11=13
-//   scale: R=0, E=0 (2^0=1), D=0 (10^0=1) → result = (0 + 1*undiff) / 1 = undiff
-//   Expected: [10, 11, 13]
+//
+//	order=1, m=1, NG=1, nBits=4 (group ref bits), BitsGroupWidth=0, BitsGroupLength=0
+//	initVals[0]=10, yMin=0
+//	group ref=0, width=4, length=3 (LenLastGroup), values packed: 0,1,2
+//	Decode: z = packed + yMin = [0,1,2]
+//	undiff: undiff[0]=10, undiff[1]=10+0=10, undiff[2]=10+1=11, undiff[3]=10+2=12
+//	Wait — order-1: undiff[0]=initVals[0], undiff[i]=z[i]+undiff[i-1]
+//	z[0]=0, z[1]=1, z[2]=2 → undiff[0]=10, undiff[1]=0+10=10, undiff[2]=1+10=11 ? No:
+//	After bias: z[i] = packed[i] + yMin. yMin=0, so z=[0,1,2]
+//	undiff[0]=10, undiff[1]=z[1]+undiff[0]=1+10=11, undiff[2]=z[2]+undiff[1]=2+11=13
+//	scale: R=0, E=0 (2^0=1), D=0 (10^0=1) → result = (0 + 1*undiff) / 1 = undiff
+//	Expected: [10, 11, 13]
 //
 // Bit layout for section 7 payload (after 5-byte header):
-//   Extra descriptors: initVals[0]=10 (1 byte, positive) = 0x0A
-//                      yMin=0 (1 byte, positive) = 0x00
-//   Group refs (nBits=4): 1 group × 4 bits = 0x0_ (ref=0 → 0000)
-//   Then align to byte.
-//   Group widths (BitsGroupWidth=4): 1 group × 4 bits = width delta=0 (RefGroupWidth=4, delta=0 → 0000)
-//   Then align to byte.
-//   Group lengths (BitsGroupLength=4): 1 group × 4 bits = length encoding=0 (consumed, LenLastGroup overrides)
-//   Then align to byte.
-//   Data values: width=4, length=3: 3 × 4 bits = 12 bits
-//     val[0]=0: 0000, val[1]=1: 0001, val[2]=2: 0010 → 0000 0001 0010 → pad to 2 bytes: 0x01 0x20
+//
+//	Extra descriptors: initVals[0]=10 (1 byte, positive) = 0x0A
+//	                   yMin=0 (1 byte, positive) = 0x00
+//	Group refs (nBits=4): 1 group × 4 bits = 0x0_ (ref=0 → 0000)
+//	Then align to byte.
+//	Group widths (BitsGroupWidth=4): 1 group × 4 bits = width delta=0 (RefGroupWidth=4, delta=0 → 0000)
+//	Then align to byte.
+//	Group lengths (BitsGroupLength=4): 1 group × 4 bits = length encoding=0 (consumed, LenLastGroup overrides)
+//	Then align to byte.
+//	Data values: width=4, length=3: 3 × 4 bits = 12 bits
+//	  val[0]=0: 0000, val[1]=1: 0001, val[2]=2: 0010 → 0000 0001 0010 → pad to 2 bytes: 0x01 0x20
 //
 // Full payload bytes after the 5-byte section header:
-//   [0x0A] [0x00]          ← initVals[0]=10, yMin=0
-//   [0x00]                 ← gref=0 in 4 bits + 4-bit pad → 0x00 (after align)
-//   [0x00]                 ← width delta=0 in 4 bits + 4-bit pad → 0x00 (after align)
-//   [0x00]                 ← length encoding in 4 bits + 4-bit pad → 0x00 (after align)
-//   [0x01] [0x20]          ← 3 values × 4 bits: 0000 0001 0010 0000 (last nibble pad)
+//
+//	[0x0A] [0x00]          ← initVals[0]=10, yMin=0
+//	[0x00]                 ← gref=0 in 4 bits + 4-bit pad → 0x00 (after align)
+//	[0x00]                 ← width delta=0 in 4 bits + 4-bit pad → 0x00 (after align)
+//	[0x00]                 ← length encoding in 4 bits + 4-bit pad → 0x00 (after align)
+//	[0x01] [0x20]          ← 3 values × 4 bits: 0000 0001 0010 0000 (last nibble pad)
 func TestUnpackDRS53RoundtripOrder1(t *testing.T) {
 	payload := []byte{
 		0x0A, 0x00, // initVals[0]=10, yMin=0

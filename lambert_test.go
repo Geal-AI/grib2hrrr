@@ -9,15 +9,15 @@ import (
 // Parameters sourced from the decoded section 3 of any HRRR GRIB2 message.
 func hrrrGrid() LambertGrid {
 	return LambertGrid{
-		Ni:     1799,
-		Nj:     1059,
-		La1:    21.138123,
-		Lo1:    237.280472, // 0-360 convention as stored in GRIB2
-		LoV:    262.5,      // 0-360 convention
-		Latin1: 38.5,
-		Latin2: 38.5,
-		Dx:     3000.0,
-		Dy:     3000.0,
+		Ni:       1799,
+		Nj:       1059,
+		La1:      21.138123,
+		Lo1:      237.280472, // 0-360 convention as stored in GRIB2
+		LoV:      262.5,      // 0-360 convention
+		Latin1:   38.5,
+		Latin2:   38.5,
+		Dx:       3000.0,
+		Dy:       3000.0,
 		ScanMode: 0x40,
 	}
 }
@@ -81,8 +81,12 @@ func TestLatLonToIJKnownPoints(t *testing.T) {
 		i, j := g.LatLonToIJ(tc.lat, tc.lon)
 		di := i - tc.wantI
 		dj := j - tc.wantJ
-		if di < 0 { di = -di }
-		if dj < 0 { dj = -dj }
+		if di < 0 {
+			di = -di
+		}
+		if dj < 0 {
+			dj = -dj
+		}
 		if di > tc.tol || dj > tc.tol {
 			t.Errorf("%s: LatLonToIJ(%.2f, %.2f) = (%d, %d), want (%d, %d) ±%d",
 				tc.name, tc.lat, tc.lon, i, j, tc.wantI, tc.wantJ, tc.tol)
@@ -250,8 +254,14 @@ func TestDecodeMessageNoSection3ReturnsError(t *testing.T) {
 	copy(buf[0:4], "GRIB")
 	buf[7] = 2
 	// TotalLength covers all 20 bytes
-	buf[8] = 0; buf[9] = 0; buf[10] = 0; buf[11] = 0
-	buf[12] = 0; buf[13] = 0; buf[14] = 0; buf[15] = 20
+	buf[8] = 0
+	buf[9] = 0
+	buf[10] = 0
+	buf[11] = 0
+	buf[12] = 0
+	buf[13] = 0
+	buf[14] = 0
+	buf[15] = 20
 	copy(buf[16:20], "7777")
 
 	_, err := DecodeMessage(buf)
@@ -271,21 +281,31 @@ func TestDecodeMessageUnsupportedDRSTemplateReturnsError(t *testing.T) {
 
 	// Section 1: minimal 21-byte identification section
 	sec1 := make([]byte, 21)
-	sec1[0] = 0; sec1[1] = 0; sec1[2] = 0; sec1[3] = 21
+	sec1[0] = 0
+	sec1[1] = 0
+	sec1[2] = 0
+	sec1[3] = 21
 	sec1[4] = 1
 
 	// Section 3: 14 + 67 = 81 bytes minimum, section number = 3
 	sec3 := make([]byte, 81)
-	sec3[0] = 0; sec3[1] = 0; sec3[2] = 0; sec3[3] = 81
+	sec3[0] = 0
+	sec3[1] = 0
+	sec3[2] = 0
+	sec3[3] = 81
 	sec3[4] = 3
 
 	// Section 5 with template number = 0 (unsupported; only 5.3 is supported)
 	// len must be >= 11; template at bytes [9:11]
 	sec5 := make([]byte, 11)
-	sec5[0] = 0; sec5[1] = 0; sec5[2] = 0; sec5[3] = 11
+	sec5[0] = 0
+	sec5[1] = 0
+	sec5[2] = 0
+	sec5[3] = 11
 	sec5[4] = 5
 	// sec5[9:11] = template number 0 (big-endian)
-	sec5[9] = 0; sec5[10] = 0
+	sec5[9] = 0
+	sec5[10] = 0
 
 	end := []byte("7777")
 

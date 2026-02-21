@@ -59,9 +59,9 @@ func TestLatLonToIJKnownPoints(t *testing.T) {
 		lat, lon float64
 		ei, ej   int // expected (i,j) from herbie, tolerance ±1
 	}{
-		{"Vail Pass CO",  39.54, -106.19, 651, 579},
-		{"Denver CO",     39.74, -104.98, 686, 584},
-		{"Seattle WA",    47.61, -122.33, 278, 953},
+		{"Vail Pass CO", 39.54, -106.19, 651, 579},
+		{"Denver CO", 39.74, -104.98, 686, 584},
+		{"Seattle WA", 47.61, -122.33, 278, 953},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -112,10 +112,10 @@ func TestLookupOutOfBounds(t *testing.T) {
 		name     string
 		lat, lon float64
 	}{
-		{"near equator",     0.0,  -97.5},
-		{"far north",       85.0,  -97.5},
-		{"far east",        39.0,   20.0},
-		{"far west",        39.0, -170.0},
+		{"near equator", 0.0, -97.5},
+		{"far north", 85.0, -97.5},
+		{"far east", 39.0, 20.0},
+		{"far west", 39.0, -170.0},
 	}
 	for _, tc := range outOfBounds {
 		t.Run(tc.name, func(t *testing.T) {
