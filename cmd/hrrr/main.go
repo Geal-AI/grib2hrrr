@@ -42,16 +42,16 @@ var knownVars = []struct {
 	{"RH:2 m above ground", "2 m relative humidity (%)", true},
 	{"REFC:entire atmosphere", "Composite reflectivity (dBZ)", true},
 	{"CAPE:surface", "Surface CAPE (J/kg)", true},
-	{"UGRD:10 m above ground", "10 m U-component of wind (m/s → mph)", false},
-	{"VGRD:10 m above ground", "10 m V-component of wind (m/s → mph)", false},
-	{"PRATE:surface", "Precipitation rate (kg/m²/s → in/hr)", false},
-	{"APCP:surface", "Total accumulated precipitation (kg/m²)", false},
-	{"HGT:cloud ceiling", "Cloud ceiling height (m → ft)", false},
-	{"VIS:surface", "Surface visibility (m → miles)", false},
-	{"PRES:surface", "Surface pressure (Pa → hPa)", false},
-	{"MSLMA:mean sea level", "Mean sea level pressure (Pa → hPa)", false},
-	{"TCDC:entire atmosphere", "Total cloud cover (%)", false},
-	{"SPFH:2 m above ground", "2 m specific humidity (kg/kg)", false},
+	{"UGRD:10 m above ground", "10 m U-component of wind (m/s → mph)", true},
+	{"VGRD:10 m above ground", "10 m V-component of wind (m/s → mph)", true},
+	{"PRATE:surface", "Precipitation rate (kg/m²/s → in/hr)", true},
+	{"APCP:surface", "Total accumulated precipitation (kg/m²)", true},
+	{"HGT:cloud ceiling", "Cloud ceiling height (m → ft)", true},
+	{"VIS:surface", "Surface visibility (m → miles)", true},
+	{"PRES:surface", "Surface pressure (Pa → hPa)", true},
+	{"MSLMA:mean sea level", "Mean sea level pressure (Pa → hPa)", true},
+	{"TCDC:entire atmosphere", "Total cloud cover (%)", true},
+	{"SPFH:2 m above ground", "2 m specific humidity (kg/kg)", true},
 }
 
 func main() {
@@ -68,7 +68,7 @@ func main() {
 	}
 
 	if flag.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "error: lat and lon are required\n")
+		fmt.Fprintln(os.Stderr, "error: lat and lon are required")
 		usage()
 		os.Exit(2)
 	}

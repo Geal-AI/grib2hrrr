@@ -80,8 +80,11 @@ func DecodeMessage(raw []byte) (*Field, error) {
 	// Walk sections; Section 0 is 16 bytes, Section 1 follows.
 	off := 16 // skip Section 0
 
+	var err error
 	var grid *LambertGrid
-	var drsParams DRS53Params
+	var drsTemplate = -1
+	var drs0Params DRS0Params
+	var drs53Params DRS53Params
 	var hasDRS bool
 	var sec7 []byte
 
@@ -111,18 +114,25 @@ func DecodeMessage(raw []byte) (*Field, error) {
 		case 4:
 			// Section 4: Product definition — skip
 		case 5:
-			// Check template number
 			if len(sec) < 11 {
 				return nil, fmt.Errorf("section 5 too short")
 			}
-			tmpl := binary.BigEndian.Uint16(sec[9:11])
-			if tmpl != 3 {
-				return nil, fmt.Errorf("unsupported DRS template %d (only 5.3 supported)", tmpl)
+			tmpl := int(binary.BigEndian.Uint16(sec[9:11]))
+			switch tmpl {
+			case 0:
+				drs0Params, err = parseDRS0(sec)
+				if err != nil {
+					return nil, fmt.Errorf("section 5: %w", err)
+				}
+			case 3:
+				drs53Params, err = parseDRS53(sec)
+				if err != nil {
+					return nil, fmt.Errorf("section 5: %w", err)
+				}
+			default:
+				return nil, fmt.Errorf("unsupported DRS template %d (supported: 5.0, 5.3)", tmpl)
 			}
-			drsParams, err = parseDRS53(sec)
-			if err != nil {
-				return nil, fmt.Errorf("section 5: %w", err)
-			}
+			drsTemplate = tmpl
 			hasDRS = true
 		case 6:
 			// Section 6: Bitmap — check for no-bitmap flag
@@ -145,9 +155,18 @@ func DecodeMessage(raw []byte) (*Field, error) {
 		return nil, fmt.Errorf("no Section 7 found in message")
 	}
 
-	vals, err := unpackDRS53(sec7, drsParams)
-	if err != nil {
-		return nil, fmt.Errorf("unpack DRS 5.3: %w", err)
+	var vals []float64
+	switch drsTemplate {
+	case 0:
+		vals, err = unpackDRS0(sec7, drs0Params)
+		if err != nil {
+			return nil, fmt.Errorf("unpack DRS 5.0: %w", err)
+		}
+	case 3:
+		vals, err = unpackDRS53(sec7, drs53Params)
+		if err != nil {
+			return nil, fmt.Errorf("unpack DRS 5.3: %w", err)
+		}
 	}
 
 	// Issue #10: use int64 arithmetic for the product to avoid overflow on 32-bit platforms.
