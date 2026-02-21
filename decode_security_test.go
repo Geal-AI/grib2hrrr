@@ -289,3 +289,120 @@ func TestDecodeScaleFactor(t *testing.T) {
 }
 
 // readUintOctets and readSignMagOctets table tests live in drs53_test.go to avoid redeclaration.
+
+// ---- DecodeMessage error paths (no network) ----
+
+func TestDecodeMessageEmptyReturnsError(t *testing.T) {
+	_, err := DecodeMessage([]byte{})
+	if err == nil {
+		t.Error("DecodeMessage(empty): expected error, got nil")
+	}
+}
+
+func TestDecodeMessageBadMagicReturnsError(t *testing.T) {
+	buf := make([]byte, 16)
+	copy(buf, "NOPE")
+	_, err := DecodeMessage(buf)
+	if err == nil {
+		t.Error("DecodeMessage(bad magic): expected error, got nil")
+	}
+}
+
+func TestDecodeMessageNoSection3ReturnsError(t *testing.T) {
+	// Valid section 0 (16 bytes) followed by immediate end marker "7777".
+	buf := make([]byte, 20)
+	copy(buf[0:4], "GRIB")
+	buf[7] = 2
+	// TotalLength covers all 20 bytes
+	buf[8] = 0
+	buf[9] = 0
+	buf[10] = 0
+	buf[11] = 0
+	buf[12] = 0
+	buf[13] = 0
+	buf[14] = 0
+	buf[15] = 20
+	copy(buf[16:20], "7777")
+
+	_, err := DecodeMessage(buf)
+	if err == nil {
+		t.Error("DecodeMessage with no section 3: expected error, got nil")
+	}
+}
+
+// TestDecodeMessageUnsupportedDRSTemplateReturnsError verifies that an unknown DRS template
+// returns an error. Template 0 is now supported via DRS 5.0; the error comes from parseDRS0
+// receiving a too-short section (11 bytes instead of 21).
+func TestDecodeMessageUnsupportedDRSTemplateReturnsError(t *testing.T) {
+	// Build a minimal message: sec0 + sec1 + sec3 (valid) + sec5 (template 0, too short) + "7777"
+	// This tests the error path in DecodeMessage without needing real GRIB data.
+
+	// Section 0: 16 bytes
+	sec0 := make([]byte, 16)
+	copy(sec0[0:4], "GRIB")
+	sec0[7] = 2
+
+	// Section 1: minimal 21-byte identification section
+	sec1 := make([]byte, 21)
+	sec1[0] = 0
+	sec1[1] = 0
+	sec1[2] = 0
+	sec1[3] = 21
+	sec1[4] = 1
+
+	// Section 3: 14 + 67 = 81 bytes minimum, section number = 3
+	sec3 := make([]byte, 81)
+	sec3[0] = 0
+	sec3[1] = 0
+	sec3[2] = 0
+	sec3[3] = 81
+	sec3[4] = 3
+
+	// Section 5 with template number = 0 but only 11 bytes (parseDRS0 needs 21)
+	sec5 := make([]byte, 11)
+	sec5[0] = 0
+	sec5[1] = 0
+	sec5[2] = 0
+	sec5[3] = 11
+	sec5[4] = 5
+	// sec5[9:11] = template number 0 (big-endian)
+	sec5[9] = 0
+	sec5[10] = 0
+
+	end := []byte("7777")
+
+	var buf []byte
+	buf = append(buf, sec0...)
+	buf = append(buf, sec1...)
+	buf = append(buf, sec3...)
+	buf = append(buf, sec5...)
+	buf = append(buf, end...)
+
+	_, err := DecodeMessage(buf)
+	if err == nil {
+		t.Error("DecodeMessage with too-short DRS 5.0 section: expected error, got nil")
+	}
+}
+
+// TestDecodeMessageUnsupportedBitmapIndicatorReturnsError verifies that a Section 6
+// with an unrecognised bitmap indicator (not 0 or 255) returns an error.
+func TestDecodeMessageUnsupportedBitmapIndicatorReturnsError(t *testing.T) {
+	sec0 := make([]byte, 16)
+	copy(sec0[0:4], "GRIB")
+	sec0[7] = 2
+
+	// Section 6: flag=1 (predefined bitmap, not supported)
+	sec6 := []byte{0x00, 0x00, 0x00, 0x06, 0x06, 0x01}
+
+	end := []byte("7777")
+
+	var buf []byte
+	buf = append(buf, sec0...)
+	buf = append(buf, sec6...)
+	buf = append(buf, end...)
+
+	_, err := DecodeMessage(buf)
+	if err == nil {
+		t.Error("DecodeMessage with bitmap indicator=1: expected error, got nil")
+	}
+}
