@@ -27,8 +27,7 @@ import (
 )
 
 // knownVars is the help text for -list.
-// drs53=true means confirmed to use DRS Template 5.3 (supported by this library).
-// drs53=false means the field commonly uses DRS Template 5.0 (not yet supported).
+// supported=true means this variable is confirmed to work (DRS Template 5.0 or 5.3).
 var knownVars = []struct {
 	key   string
 	desc  string
@@ -188,7 +187,7 @@ func printResult(lat, lon float64, run time.Time, fxx int, varLevel string, val 
 func printVarList() {
 	fmt.Println("Common HRRR variable strings for use with -var:")
 	fmt.Println()
-	fmt.Println("  ✅ = supported (DRS 5.3)   ⚠️  = uses DRS 5.0, not yet supported")
+	fmt.Println("  ✅ = supported (DRS 5.0 and 5.3)")
 	fmt.Println()
 	maxKey := 0
 	for _, v := range knownVars {
