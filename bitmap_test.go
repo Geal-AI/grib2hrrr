@@ -132,8 +132,8 @@ func TestDecodeMessageWithBitmap(t *testing.T) {
 	sec3 := make([]byte, 81)
 	binary.BigEndian.PutUint32(sec3[0:4], 81)
 	sec3[4] = 3
-	binary.BigEndian.PutUint32(sec3[6:10], 4)     // 4 grid points
-	binary.BigEndian.PutUint16(sec3[12:14], 30)   // GDT 3.30
+	binary.BigEndian.PutUint32(sec3[6:10], 4)   // 4 grid points
+	binary.BigEndian.PutUint16(sec3[12:14], 30) // GDT 3.30
 	g := sec3[14:]
 	g[0] = 6
 	binary.BigEndian.PutUint32(g[16:20], 2)                       // Ni=2

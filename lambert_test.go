@@ -227,4 +227,3 @@ func TestLookupInBoundsReturnsCorrectValue(t *testing.T) {
 		t.Errorf("Lookup returned %f but vals[%d]=%f", got, wantIdx, vals[wantIdx])
 	}
 }
-
